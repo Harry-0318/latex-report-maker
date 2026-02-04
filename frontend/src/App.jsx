@@ -50,6 +50,13 @@ function App() {
         cells: cells.map(cell => {
           // Destructure to remove file_obj from JSON
           const { file_obj, ...rest } = cell;
+
+          // Ensure unique filenames for images to avoid collisions
+          if (cell.type === 'image' && file_obj) {
+            const uniqueFilename = `${cell.id}_${file_obj.name}`;
+            return { ...rest, content: uniqueFilename, original_filename: uniqueFilename };
+          }
+
           return rest;
         })
       };
@@ -59,11 +66,9 @@ function App() {
       // Append files
       cells.forEach(cell => {
         if (cell.type === 'image' && cell.file_obj) {
-          // The backend expects filename to match what's in content/original_filename
-          // cell.content holds the filename from ImageCell logic
-          // But duplicate filenames could be an issue if distinct files have same name.
-          // For this MVP we trust the user or the browser's file handling.
-          formData.append("files", cell.file_obj);
+          // Send file with the unique filename matching the JSON report
+          const uniqueFilename = `${cell.id}_${cell.file_obj.name}`;
+          formData.append("files", cell.file_obj, uniqueFilename);
         }
       });
 
