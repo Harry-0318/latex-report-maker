@@ -5,13 +5,6 @@ import ImageCell from './components/ImageCell';
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import './index.css';
 
-import React, { useState, useEffect } from 'react';
-import TextCell from './components/TextCell';
-import CodeCell from './components/CodeCell';
-import ImageCell from './components/ImageCell';
-import { saveToStorage, loadFromStorage } from './utils/storage';
-import './index.css';
-
 function App() {
   const [title, setTitle] = useState("My Lab Report");
   const [author, setAuthor] = useState("Student Name");
