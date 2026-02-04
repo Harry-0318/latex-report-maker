@@ -36,22 +36,22 @@ Prerequisites: Python 3.8+
 
 2. Create a virtual environment:
    ```bash
-   python3 -m venv venv
+   python3 -m venv env
    ```
 
 3. Activate the virtual environment:
    - **Mac/Linux**:
      ```bash
-     source venv/bin/activate
+     source env/bin/activate
      ```
    - **Windows**:
      ```bash
-     venv\Scripts\activate
+     env\Scripts\activate
      ```
 
 4. Install dependencies:
    ```bash
-   pip install fastapi uvicorn python-multipart
+   pip install -r requirements.txt
    ```
 
 5. Start the server:
