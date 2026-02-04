@@ -1,15 +1,8 @@
-<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import TextCell from './components/TextCell';
 import CodeCell from './components/CodeCell';
 import ImageCell from './components/ImageCell';
 import { saveToStorage, loadFromStorage } from './utils/storage';
-=======
-import React, { useState } from 'react';
-import TextCell from './components/TextCell';
-import CodeCell from './components/CodeCell';
-import ImageCell from './components/ImageCell';
->>>>>>> 03934c5e295a479cb4f0216ddd1d5185457f162a
 import './index.css';
 
 function App() {
@@ -17,7 +10,6 @@ function App() {
   const [author, setAuthor] = useState("Student Name");
   const [cells, setCells] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
-<<<<<<< HEAD
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from storage on mount
@@ -44,8 +36,6 @@ function App() {
 
     return () => clearTimeout(timer);
   }, [title, author, cells, isLoaded]);
-=======
->>>>>>> 03934c5e295a479cb4f0216ddd1d5185457f162a
 
   const addCell = (type) => {
     const newCell = {
