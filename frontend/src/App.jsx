@@ -5,10 +5,18 @@ import ImageCell from './components/ImageCell';
 import { saveToStorage, loadFromStorage } from './utils/storage';
 import './index.css';
 
+import React, { useState, useEffect } from 'react';
+import TextCell from './components/TextCell';
+import CodeCell from './components/CodeCell';
+import ImageCell from './components/ImageCell';
+import { saveToStorage, loadFromStorage } from './utils/storage';
+import './index.css';
+
 function App() {
   const [title, setTitle] = useState("My Lab Report");
   const [author, setAuthor] = useState("Student Name");
-  const [cells, setCells] = useState([]);
+  // State: [{ id, title, subsections: [{ id, title, cells: [] }] }]
+  const [sections, setSections] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -19,79 +27,209 @@ function App() {
       if (data) {
         setTitle(data.title);
         setAuthor(data.author);
-        setCells(data.cells);
+        setSections(data.sections || []);
+      } else {
+        // Initialize with one empty section/subsection if no data
+        setSections([{
+          id: Date.now().toString(),
+          title: "Introduction",
+          subsections: [{
+            id: (Date.now() + 1).toString(),
+            title: "Overview",
+            cells: []
+          }]
+        }]);
       }
       setIsLoaded(true);
     }
     load();
   }, []);
 
-  // Autosave on changes (debounced)
+  // Autosave
   useEffect(() => {
-    if (!isLoaded) return; // Don't save before initial load
-
+    if (!isLoaded) return;
     const timer = setTimeout(() => {
-      saveToStorage({ title, author, cells });
+      saveToStorage({ title, author, sections });
     }, 1000);
-
     return () => clearTimeout(timer);
-  }, [title, author, cells, isLoaded]);
+  }, [title, author, sections, isLoaded]);
 
-  const addCell = (type) => {
+  // --- Actions ---
+
+  const addSection = () => {
+    setSections([...sections, {
+      id: Date.now().toString(),
+      title: "New Section",
+      subsections: [{
+        id: (Date.now() + 1).toString(),
+        title: "New Subsection",
+        cells: []
+      }]
+    }]);
+  };
+
+  const updateSectionTitle = (secId, newTitle) => {
+    setSections(sections.map(s => s.id === secId ? { ...s, title: newTitle } : s));
+  };
+
+  const deleteSection = (secId) => {
+    if (confirm("Delete this section and all its contents?")) {
+      setSections(sections.filter(s => s.id !== secId));
+    }
+  };
+
+  const addSubsection = (secId) => {
+    setSections(sections.map(s => {
+      if (s.id === secId) {
+        return {
+          ...s,
+          subsections: [...s.subsections, {
+            id: Date.now().toString(),
+            title: "New Subsection",
+            cells: []
+          }]
+        };
+      }
+      return s;
+    }));
+  };
+
+  const updateSubsectionTitle = (secId, subId, newTitle) => {
+    setSections(sections.map(s => {
+      if (s.id === secId) {
+        return {
+          ...s,
+          subsections: s.subsections.map(sub =>
+            sub.id === subId ? { ...sub, title: newTitle } : sub
+          )
+        };
+      }
+      return s;
+    }));
+  };
+
+  const deleteSubsection = (secId, subId) => {
+    if (confirm("Delete this subsection and its cells?")) {
+      setSections(sections.map(s => {
+        if (s.id === secId) {
+          return {
+            ...s,
+            subsections: s.subsections.filter(sub => sub.id !== subId)
+          };
+        }
+        return s;
+      }));
+    }
+  };
+
+  // Cell Actions - now scoped to secId and subId
+  const addCell = (secId, subId, type) => {
     const newCell = {
       id: Date.now().toString(),
       type,
       content: "",
       mode: type === 'image' ? 'placeholder' : undefined,
       caption: "",
-      file_obj: null // Not part of serializable JSON
+      file_obj: null
     };
-    setCells([...cells, newCell]);
+
+    setSections(sections.map(s => {
+      if (s.id === secId) {
+        return {
+          ...s,
+          subsections: s.subsections.map(sub => {
+            if (sub.id === subId) {
+              return { ...sub, cells: [...sub.cells, newCell] };
+            }
+            return sub;
+          })
+        };
+      }
+      return s;
+    }));
   };
 
-  const updateCell = (id, data) => {
-    setCells(cells.map(cell =>
-      cell.id === id ? { ...cell, ...data } : cell
-    ));
+  const updateCell = (secId, subId, cellId, data) => {
+    setSections(sections.map(s => {
+      if (s.id === secId) {
+        return {
+          ...s,
+          subsections: s.subsections.map(sub => {
+            if (sub.id === subId) {
+              return {
+                ...sub,
+                cells: sub.cells.map(cell =>
+                  cell.id === cellId ? { ...cell, ...data } : cell
+                )
+              };
+            }
+            return sub;
+          })
+        };
+      }
+      return s;
+    }));
   };
 
-  const deleteCell = (id) => {
-    setCells(cells.filter(cell => cell.id !== id));
+  const deleteCell = (secId, subId, cellId) => {
+    setSections(sections.map(s => {
+      if (s.id === secId) {
+        return {
+          ...s,
+          subsections: s.subsections.map(sub => {
+            if (sub.id === subId) {
+              return {
+                ...sub,
+                cells: sub.cells.filter(c => c.id !== cellId)
+              };
+            }
+            return sub;
+          })
+        };
+      }
+      return s;
+    }));
   };
 
   const generateZip = async () => {
-    if (cells.length === 0) {
-      alert("Please add at least one cell to the report.");
+    if (sections.length === 0) {
+      alert("Report is empty.");
       return;
     }
 
     setIsGenerating(true);
-
     try {
       const formData = new FormData();
 
-      // Prepare clean JSON
+      // Clean JSON construction
       const reportData = {
         title,
         author,
-        cells: cells.map(cell => {
-          // Destructure to remove file_obj from JSON
-          const { file_obj, ...rest } = cell;
-          return rest;
-        })
+        sections: sections.map(s => ({
+          id: s.id,
+          title: s.title,
+          subsections: s.subsections.map(sub => ({
+            id: sub.id,
+            title: sub.title,
+            cells: sub.cells.map(cell => {
+              const { file_obj, ...rest } = cell;
+              return rest;
+            })
+          }))
+        }))
       };
 
       formData.append("report_json", JSON.stringify(reportData));
 
-      // Append files
-      cells.forEach(cell => {
-        if (cell.type === 'image' && cell.file_obj) {
-          // The backend expects filename to match what's in content/original_filename
-          // cell.content holds the filename from ImageCell logic
-          // But duplicate filenames could be an issue if distinct files have same name.
-          // For this MVP we trust the user or the browser's file handling.
-          formData.append("files", cell.file_obj);
-        }
+      // Append files by traversing sections
+      sections.forEach(s => {
+        s.subsections.forEach(sub => {
+          sub.cells.forEach(cell => {
+            if (cell.type === 'image' && cell.file_obj) {
+              formData.append("files", cell.file_obj);
+            }
+          });
+        });
       });
 
       const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
@@ -104,7 +242,6 @@ function App() {
         throw new Error(`Server error: ${response.statusText}`);
       }
 
-      // Handle download
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -114,18 +251,15 @@ function App() {
       a.click();
       window.URL.revokeObjectURL(url);
       a.remove();
-
     } catch (error) {
-      console.error("Error generating report:", error);
-      alert(`Failed to generate report: ${error.message}`);
+      console.error(error);
+      alert(`Generation failed: ${error.message}`);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  if (!isLoaded) {
-    return <div className="loading">Loading saved state...</div>;
-  }
+  if (!isLoaded) return <div className="loading">Loading...</div>;
 
   return (
     <div className="app-container">
@@ -136,64 +270,88 @@ function App() {
       <div className="metadata-section">
         <label>
           <strong>Report Title</strong>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
+          <input type="text" value={title} onChange={e => setTitle(e.target.value)} />
         </label>
         <label>
           <strong>Author</strong>
-          <input
-            type="text"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
-          />
+          <input type="text" value={author} onChange={e => setAuthor(e.target.value)} />
         </label>
       </div>
 
-      <div className="cells-container">
-        {cells.map((cell, index) => (
-          <div key={cell.id} className="cell-card">
-            <div className="cell-header">
-              <span className="cell-type-badge">{index + 1}. {cell.type}</span>
-              <button className="delete-btn" onClick={() => deleteCell(cell.id)}>
-                Delete
-              </button>
+      <div className="report-content">
+        {sections.map(section => (
+          <div key={section.id} className="section-wrapper">
+            <div className="section-header">
+              <input
+                value={section.title}
+                onChange={(e) => updateSectionTitle(section.id, e.target.value)}
+              />
+              <div className="controls-bar">
+                <button className="btn-secondary" onClick={() => addSubsection(section.id)}>+ Subsec</button>
+                <button className="delete-btn" onClick={() => deleteSection(section.id)}>🗑</button>
+              </div>
             </div>
 
-            {cell.type === 'text' && (
-              <TextCell cell={cell} updateCell={updateCell} />
-            )}
-            {cell.type === 'code' && (
-              <CodeCell cell={cell} updateCell={updateCell} />
-            )}
-            {cell.type === 'image' && (
-              <ImageCell cell={cell} updateCell={updateCell} />
-            )}
+            <div className="section-content">
+              {section.subsections.map(subsection => (
+                <div key={subsection.id} className="subsection-wrapper">
+                  <div className="subsection-header">
+                    <input
+                      value={subsection.title}
+                      onChange={(e) => updateSubsectionTitle(section.id, subsection.id, e.target.value)}
+                    />
+                    <button className="delete-btn" onClick={() => deleteSubsection(section.id, subsection.id)}>🗑</button>
+                  </div>
+
+                  <div className="cells-container">
+                    {subsection.cells.map((cell, idx) => (
+                      <div key={cell.id} className="cell-card">
+                        <div className="cell-header">
+                          <span className="cell-type-badge">{idx + 1}. {cell.type}</span>
+                          <button className="delete-btn" onClick={() => deleteCell(section.id, subsection.id, cell.id)}>Delete</button>
+                        </div>
+                        {cell.type === 'text' && (
+                          <TextCell
+                            cell={cell}
+                            updateCell={(id, d) => updateCell(section.id, subsection.id, id, d)}
+                          />
+                        )}
+                        {cell.type === 'code' && (
+                          <CodeCell
+                            cell={cell}
+                            updateCell={(id, d) => updateCell(section.id, subsection.id, id, d)}
+                          />
+                        )}
+                        {cell.type === 'image' && (
+                          <ImageCell
+                            cell={cell}
+                            updateCell={(id, d) => updateCell(section.id, subsection.id, id, d)}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="add-cell-bar">
+                    <button className="btn-add-cell" onClick={() => addCell(section.id, subsection.id, 'text')}>+ Text</button>
+                    <button className="btn-add-cell" onClick={() => addCell(section.id, subsection.id, 'code')}>+ Code</button>
+                    <button className="btn-add-cell" onClick={() => addCell(section.id, subsection.id, 'image')}>+ Image</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
 
-        {cells.length === 0 && (
-          <div className="text-center p-8 text-gray-500 bg-white rounded border border-dashed">
-            Start by adding content cells below.
-          </div>
-        )}
+        <div className="section-controls">
+          <button className="btn-secondary" onClick={addSection}>+ Add New Section</button>
+        </div>
       </div>
 
-      <div className="controls">
-        <div className="add-buttons">
-          <button className="btn-add" onClick={() => addCell('text')}>+ Text</button>
-          <button className="btn-add" onClick={() => addCell('code')}>+ Code</button>
-          <button className="btn-add" onClick={() => addCell('image')}>+ Image</button>
-        </div>
-
-        <button
-          className="btn-generate"
-          onClick={generateZip}
-          disabled={isGenerating}
-        >
-          {isGenerating ? "Generating..." : "Generate ZIP"}
+      <div className="main-controls">
+        <span>{sections.length > 5 ? "TOC will be generated." : "No TOC (add >5 sections)"}</span>
+        <button className="btn-generate" onClick={generateZip} disabled={isGenerating}>
+          {isGenerating ? "Processing..." : "Generate ZIP"}
         </button>
       </div>
     </div>

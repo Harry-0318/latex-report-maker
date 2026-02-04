@@ -32,10 +32,20 @@ class Cell(BaseModel):
     caption: Optional[str] = ""
     original_filename: Optional[str] = None # for tracking image files
 
+class Subsection(BaseModel):
+    id: str
+    title: str
+    cells: List[Cell]
+
+class Section(BaseModel):
+    id: str
+    title: str
+    subsections: List[Subsection]
+
 class Report(BaseModel):
     title: str
     author: str
-    cells: List[Cell]
+    sections: List[Section]
 
 @app.post("/generate-zip")
 async def generate_zip(
@@ -47,44 +57,46 @@ async def generate_zip(
         report_data = json.loads(report_json)
         report = Report(**report_data)
         
-        # Prepare image map: original_filename -> clean_filename
-        # We also need to read the file contents
+        # Prepare image map
         image_files = {} # clean_filename -> bytes
         image_map = {} # original_filename -> clean_filename
         
-        # Map uploaded files by their filename
-        # Note: frontend must send files with names matching what's in 'original_filename' or 'content'
         uploaded_file_map = {f.filename: f for f in files}
         
-        # Process cells to find images and map them
+        # Process all cells in the nested structure
         image_counter = 1
-        for cell in report.cells:
-            if cell.type == "image" and cell.mode != "placeholder":
-                # Determine the filename to look for
-                target_filename = cell.original_filename or cell.content
-                
-                if target_filename in uploaded_file_map:
-                    file_obj = uploaded_file_map[target_filename]
-                    # Create a clean safe filename for latex
-                    # e.g. img001.png, img002.jpg
-                    ext = target_filename.split('.')[-1] if '.' in target_filename else 'png'
-                    clean_name = f"img_{image_counter:03d}.{ext}"
-                    
-                    # Read content
-                    # If we haven't read this file yet (in case of duplicate usage? Unlikely for this app but possible)
-                    # We re-read or cache. UploadFile.read() consumes stream.
-                    await file_obj.seek(0)
-                    content = await file_obj.read()
-                    
-                    image_files[clean_name] = content
-                    image_map[target_filename] = clean_name
-                    image_counter += 1
+        for section in report.sections:
+            for subsection in section.subsections:
+                for cell in subsection.cells:
+                    if cell.type == "image" and cell.mode != "placeholder":
+                        target_filename = cell.original_filename or cell.content
+                        if target_filename in uploaded_file_map:
+                            file_obj = uploaded_file_map[target_filename]
+                            ext = target_filename.split('.')[-1] if '.' in target_filename else 'png'
+                            clean_name = f"img_{image_counter:03d}.{ext}"
+                            
+                            await file_obj.seek(0)
+                            content = await file_obj.read()
+                            image_files[clean_name] = content
+                            image_map[target_filename] = clean_name
+                            image_counter += 1
         
-        # Render cells
+        # Build LaTeX Body
         latex_body_parts = []
-        for cell in report.cells:
-            latex_body_parts.append(render_cell(cell, image_map))
+        
+        # Add TOC if significant
+        if len(report.sections) > 5:
+            latex_body_parts.append("\\tableofcontents\n\\newpage\n\n")
+
+        for section in report.sections:
+            latex_body_parts.append(f"\\section{{{escape_latex(section.title)}}}\n")
             
+            for subsection in section.subsections:
+                latex_body_parts.append(f"\\subsection{{{escape_latex(subsection.title)}}}\n")
+                
+                for cell in subsection.cells:
+                    latex_body_parts.append(render_cell(cell, image_map))
+        
         latex_body = "".join(latex_body_parts)
         
         # Fill template
