@@ -8,7 +8,7 @@ import json
 # Assuming backend is the root or in python path. 
 # Relative imports might be tricky depending on how it's run.
 # Using absolute imports based on file structure.
-from latex.cell_renderer import render_cell
+from latex.cell_renderer import render_cell, escape_latex
 from latex.template import LATEX_TEMPLATE
 from zip_utils.zip_builder import create_report_zip
 
@@ -120,6 +120,9 @@ async def generate_zip(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format in report_json")
     except Exception as e:
+        print(f"ERROR: {e}") # Print error to server logs
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
