@@ -31,6 +31,8 @@ async def fetchAllTemplates() -> List[Dict[str, Any]]:
                 headers=headers,
                 timeout=10.0
             )
+
+            print(response)
             
             if response.status_code != 200:
                 print(f"Template fetch failed: {response.status_code} - {response.text}")
