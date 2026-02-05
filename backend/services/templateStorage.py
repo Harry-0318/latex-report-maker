@@ -16,7 +16,7 @@ async def fetchAllTemplates() -> List[Dict[str, Any]]:
         print("ERROR: STORAGE_TOKEN environment variable not set")
         return []
     
-    url = f"{STORAGE_BASE_URL}/tools/tool_report_templates"
+    url = f"{STORAGE_BASE_URL}/tools/report_templates"
     headers = {
         "Authorization": f"Bearer {token}",
         "token": token
