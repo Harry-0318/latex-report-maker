@@ -453,6 +453,26 @@ Fetch template by 6-character code.
 }
 ```
 
+### `GET /admin/templates`
+
+**Admin only** — List all available template codes and names.
+
+**Response**:
+```json
+[
+  { "code": "ABC123", "name": "Physics Lab Template" },
+  { "code": "XYZ789", "name": "Chemistry Report" }
+]
+```
+
+**Error Response**:
+```json
+{
+  "success": false,
+  "error": "storage_unreachable"
+}
+```
+
 ---
 
 ## License

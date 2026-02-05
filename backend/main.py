@@ -62,6 +62,30 @@ async def get_template(code: str):
     else:
         return JSONResponse(content={"success": False, "error": "Invalid template code"}, status_code=404)
 
+@app.get("/admin/templates")
+async def admin_list_templates():
+    """Admin endpoint to list all available template codes and names."""
+    from services.templateStorage import fetchAllTemplates
+    
+    try:
+        records = await fetchAllTemplates()
+        
+        # Return only code and name, not full structure
+        templates = [
+            {"code": r.get("code"), "name": r.get("name")}
+            for r in records
+            if r.get("code") and r.get("name")
+        ]
+        
+        return templates
+    
+    except Exception as e:
+        print(f"Admin templates error: {e}")
+        return JSONResponse(
+            content={"success": False, "error": "storage_unreachable"},
+            status_code=502
+        )
+
 class Cell(BaseModel):
     id: str
     type: str  # text, code, image
