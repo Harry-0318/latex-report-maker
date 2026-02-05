@@ -16,10 +16,16 @@ async def fetchAllTemplates() -> List[Dict[str, Any]]:
         print("ERROR: STORAGE_TOKEN environment variable not set")
         return []
     
+    internal_key = os.environ.get("INTERNAL_KEY")
+    if not internal_key:
+        print("ERROR: INTERNAL_KEY environment variable not set")
+        return []
+    
     url = f"{STORAGE_BASE_URL}/tools/report_templates"
     headers = {
         "Authorization": f"Bearer {token}",
-        "token": token
+        "token": token,
+        "x-internal-key": internal_key
     }
     params = {"limit": 50}
 
