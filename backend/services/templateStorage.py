@@ -25,6 +25,9 @@ async def fetchAllTemplates() -> List[Dict[str, Any]]:
 
     try:
         async with httpx.AsyncClient() as client:
+            print(url)
+            print(headers)
+            print(params)
             response = await client.get(
                 url,
                 params=params,
