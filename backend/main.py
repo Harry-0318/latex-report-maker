@@ -1,8 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import json
+import os
+import httpx
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Import local modules
 # Assuming backend is the root or in python path. 
@@ -23,6 +29,38 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
+
+STORAGE_BASE_URL = "https://storage.projectalpha.in"
+
+@app.get("/get-template/{code}")
+async def get_template(code: str):
+    if len(code) != 6:
+        return JSONResponse(content={"success": False, "error": "Invalid template code length"}, status_code=400)
+
+    # Use the new service
+    # Import inside function or at top - keeping imports top is better but for this tool usage I'll add import at top in next step or just do it here if I assume I can edit whole file or multiple chunks.
+    # I can't edit multiple chunks with replace_file_content.
+    # I will do dynamic import here for safety or assume I can add import.
+    # Actually, I should update imports first or use full path.
+    # Let's use local import for now to minimise conflict, or update the top of file later.
+    from services.templateStorage import fetchAllTemplates
+    
+    records = await fetchAllTemplates()
+    
+    target_template = None
+    for record in records:
+        if record.get("code") == code:
+            target_template = record
+            break
+    
+    if target_template:
+        return {
+            "success": True,
+            "name": target_template.get("name"),
+            "structure": target_template.get("structure")
+        }
+    else:
+        return JSONResponse(content={"success": False, "error": "Invalid template code"}, status_code=404)
 
 class Cell(BaseModel):
     id: str

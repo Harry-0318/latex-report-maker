@@ -11,6 +11,7 @@ function App() {
   // State: [{ id, title, subsections: [{ id, title, cells: [] }] }]
   const [sections, setSections] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from storage on mount
@@ -252,12 +253,100 @@ function App() {
     }
   };
 
+  const useTemplate = async () => {
+    const code = prompt("Enter 6-character template code:");
+    if (!code) return;
+
+    if (code.length !== 6) {
+      alert("Invalid code length. Must be 6 characters.");
+      return;
+    }
+
+    if (!confirm("Loading a template will replace your current report. Continue?")) {
+      return;
+    }
+
+    setIsLoadingTemplate(true);
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+      const response = await fetch(`${backendUrl}/get-template/${code}`);
+
+      // Handle non-JSON responses gracefully
+      let result;
+      try {
+        result = await response.json();
+      } catch (parseErr) {
+        console.error("Failed to parse response:", parseErr);
+        alert("Invalid template code");
+        return;
+      }
+
+      if (result.success) {
+        let newSections = [];
+        if (Array.isArray(result.structure)) {
+          newSections = result.structure;
+        } else if (result.structure && Array.isArray(result.structure.sections)) {
+          newSections = result.structure.sections;
+        } else {
+          console.error("Unknown structure:", result.structure);
+          alert("Error: Template structure incompatible.");
+          return;
+        }
+
+        // Check for empty template
+        if (newSections.length === 0) {
+          alert("Template is empty.");
+          return;
+        }
+
+        // Normalize basic fields to avoid crashes
+        newSections = newSections.map(sec => ({
+          id: sec.id || Date.now().toString() + Math.random(),
+          title: sec.title || "Untitled Section",
+          subsections: (sec.subsections || []).map(sub => ({
+            id: sub.id || Date.now().toString() + Math.random(),
+            title: sub.title || "Untitled Subsection",
+            cells: (sub.cells || []).map(cell => ({
+              id: cell.id || Date.now().toString() + Math.random(),
+              type: cell.type || "text",
+              content: cell.content || "",
+              mode: cell.mode || (cell.type === 'image' ? 'placeholder' : undefined),
+              caption: cell.caption || "",
+              file_obj: null
+            }))
+          }))
+        }));
+
+        // Get current title/author for autosave (fixes race condition)
+        const currentTitle = title;
+        const currentAuthor = author;
+
+        setSections(newSections);
+
+        // Trigger immediate autosave with current values
+        saveToStorage({ title: currentTitle, author: currentAuthor, sections: newSections });
+
+        alert(`Template "${result.name}" loaded successfully.`);
+      } else {
+        alert(result.error || "Invalid template code");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to load template. Server error.");
+    } finally {
+      setIsLoadingTemplate(false);
+    }
+  };
+
   if (!isLoaded) return <div className="loading">Loading...</div>;
 
   return (
     <div className="app-container">
       <header className="app-header">
         <h1>Lab Report Builder</h1>
+        <button className="btn-secondary" onClick={useTemplate} disabled={isLoadingTemplate} style={{ marginLeft: 'auto' }}>
+          {isLoadingTemplate ? "Loading..." : "Use Template"}
+        </button>
       </header>
 
       <div className="metadata-section">

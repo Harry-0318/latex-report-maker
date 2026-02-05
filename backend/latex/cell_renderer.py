@@ -109,4 +109,6 @@ def render_cell(cell, image_map):
                     f"\\end{{figure}}\n\n"
                 )
     
+    # Unknown cell type - log warning and return empty
+    print(f"WARNING: Unknown cell type '{c_type}' encountered, skipping")
     return ""
