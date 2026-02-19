@@ -194,6 +194,20 @@ function App() {
     setIsGenerating(true);
     try {
       const formData = new FormData();
+      const uniqueFilenames = {};
+
+      // Append files with unique names
+      sections.forEach(s => {
+        s.subsections.forEach(sub => {
+          sub.cells.forEach(cell => {
+            if (cell.type === 'image' && cell.file_obj) {
+              const uniqueName = `${cell.id}_${cell.file_obj.name}`;
+              uniqueFilenames[cell.id] = uniqueName;
+              formData.append("files", cell.file_obj, uniqueName);
+            }
+          });
+        });
+      });
 
       // Clean JSON construction
       const reportData = {
@@ -207,6 +221,13 @@ function App() {
             title: sub.title,
             cells: sub.cells.map(cell => {
               const { file_obj, ...rest } = cell;
+              if (uniqueFilenames[cell.id]) {
+                return {
+                  ...rest,
+                  content: uniqueFilenames[cell.id],
+                  original_filename: uniqueFilenames[cell.id]
+                };
+              }
               return rest;
             })
           }))
@@ -214,17 +235,6 @@ function App() {
       };
 
       formData.append("report_json", JSON.stringify(reportData));
-
-      // Append files by traversing sections
-      sections.forEach(s => {
-        s.subsections.forEach(sub => {
-          sub.cells.forEach(cell => {
-            if (cell.type === 'image' && cell.file_obj) {
-              formData.append("files", cell.file_obj);
-            }
-          });
-        });
-      });
 
       const backendUrl = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
       const response = await fetch(`${backendUrl}/generate-zip`, {
