@@ -64,6 +64,10 @@ select {
 .app-header {
   text-align: center;
   margin-bottom: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
 }
 
 .metadata-section {
@@ -153,6 +157,7 @@ select {
   padding: 1rem;
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  margin-bottom: 1rem;
 }
 
 .cell-header {
@@ -288,4 +293,108 @@ select {
   align-items: center;
   gap: 0.25rem;
   font-size: 0.875rem;
+}
+
+/* Canvas Cells */
+.canvas-cells-container {
+  margin-bottom: 2rem;
+  padding: 1rem;
+  background: #f8fafc;
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+}
+
+.canvas-add-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-top: 1rem;
+}
+
+.canvas-add-bar span {
+  font-weight: 600;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* Drag and Drop Styles */
+.drag-handle-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-grow: 1;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #94a3b8;
+  font-size: 1.2rem;
+  line-height: 1;
+  user-select: none;
+  padding: 4px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.drag-handle:hover {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Phone Upload Feature */
+.btn-phone-upload {
+  background-color: #f0fdf4;
+  border: 1px solid #22c55e;
+  color: #16a34a;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-phone-upload:hover {
+  background-color: #dcfce7;
+}
+
+.modal-overlay {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  animation: slideUp 0.3s ease-out;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.cloud-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: var(--primary-color);
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }

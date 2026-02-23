@@ -1,5 +1,5 @@
 
-LATEX_TEMPLATE = r"""
+BASE_DOCUMENT = r"""
 \documentclass[12pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}

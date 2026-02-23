@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, APIRouter
 from fastapi.responses import Response, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -11,12 +11,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Import local modules
-# Assuming backend is the root or in python path. 
-# Relative imports might be tricky depending on how it's run.
-# Using absolute imports based on file structure.
 from latex.cell_renderer import render_cell, escape_latex
-from latex.template import LATEX_TEMPLATE
+from latex.base_document import BASE_DOCUMENT
 from zip_utils.zip_builder import create_report_zip
+
+from routers import upload, ws, assets
+from services.asset_store import asset_store
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -24,67 +24,16 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-STORAGE_BASE_URL = "https://storage.projectalpha.in"
-
-@app.get("/get-template/{code}")
-async def get_template(code: str):
-    if len(code) != 6:
-        return JSONResponse(content={"success": False, "error": "Invalid template code length"}, status_code=400)
-
-    # Use the new service
-    # Import inside function or at top - keeping imports top is better but for this tool usage I'll add import at top in next step or just do it here if I assume I can edit whole file or multiple chunks.
-    # I can't edit multiple chunks with replace_file_content.
-    # I will do dynamic import here for safety or assume I can add import.
-    # Actually, I should update imports first or use full path.
-    # Let's use local import for now to minimise conflict, or update the top of file later.
-    from services.templateStorage import fetchAllTemplates
-    
-    records = await fetchAllTemplates()
-    
-    target_template = None
-    for record in records:
-        if record.get("code") == code:
-            target_template = record
-            break
-    
-    if target_template:
-        return {
-            "success": True,
-            "name": target_template.get("name"),
-            "structure": target_template.get("structure")
-        }
-    else:
-        return JSONResponse(content={"success": False, "error": "Invalid template code"}, status_code=404)
-
-@app.get("/admin/templates")
-async def admin_list_templates():
-    """Admin endpoint to list all available template codes and names."""
-    from services.templateStorage import fetchAllTemplates
-    
-    try:
-        records = await fetchAllTemplates()
-        
-        # Return only code and name, not full structure
-        templates = [
-            {"code": r.get("code"), "name": r.get("name")}
-            for r in records
-            if r.get("code") and r.get("name")
-        ]
-        
-        return templates
-    
-    except Exception as e:
-        print(f"Admin templates error: {e}")
-        return JSONResponse(
-            content={"success": False, "error": "storage_unreachable"},
-            status_code=502
-        )
+# Include routers
+app.include_router(upload.router, tags=["upload"])
+app.include_router(ws.router, tags=["websocket"])
+app.include_router(assets.router, tags=["assets"])
 
 class Cell(BaseModel):
     id: str
@@ -93,6 +42,7 @@ class Cell(BaseModel):
     mode: Optional[str] = "placeholder" # for images
     caption: Optional[str] = ""
     original_filename: Optional[str] = None # for tracking image files
+    asset_id: Optional[str] = None # for pre-uploaded assets via phone
 
 class Subsection(BaseModel):
     id: str
@@ -107,7 +57,47 @@ class Section(BaseModel):
 class Report(BaseModel):
     title: str
     author: str
+    cells: List[Cell] = []
     sections: List[Section]
+
+async def process_cells(cells: List[Cell], uploaded_file_map, image_files, image_map, image_counter):
+    for cell in cells:
+        if cell.type == "image" and cell.mode != "placeholder":
+            content_bytes = None
+            ext = "png"
+            
+            # 1. Check for asset_id (pre-uploaded via phone)
+            if cell.asset_id:
+                asset_path = asset_store.get_asset_path(cell.asset_id)
+                if asset_path and os.path.exists(asset_path):
+                    with open(asset_path, "rb") as f:
+                        content_bytes = f.read()
+                    ext = asset_path.split('.')[-1]
+            
+            # 2. Fallback to multipart upload (desktop)
+            if not content_bytes:
+                target_filename = cell.original_filename or cell.content
+                if target_filename in uploaded_file_map:
+                    file_obj = uploaded_file_map[target_filename]
+                    ext = target_filename.split('.')[-1] if '.' in target_filename else 'png'
+                    await file_obj.seek(0)
+                    content_bytes = await file_obj.read()
+            
+            # 3. If we have content, add it to the ZIP map
+            if content_bytes:
+                clean_name = f"img_{image_counter[0]:03d}.{ext}"
+                image_files[clean_name] = content_bytes
+                # Use id as key in map if filename is not stable
+                # latex renderer uses image_map[cell.original_filename or cell.content]
+                target_key = cell.original_filename or cell.content
+                if cell.asset_id:
+                    # For asset_id, cell.content might be empty/URL
+                    # We need a stable key for renderer. 
+                    # Renderer uses cell.content if original_filename is missing.
+                    target_key = cell.original_filename or cell.content or cell.asset_id
+                
+                image_map[target_key] = clean_name
+                image_counter[0] += 1
 
 @app.post("/generate-zip")
 async def generate_zip(
@@ -121,27 +111,18 @@ async def generate_zip(
         
         # Prepare image map
         image_files = {} # clean_filename -> bytes
-        image_map = {} # original_filename -> clean_filename
+        image_map = {} # target_key -> clean_filename
         
         uploaded_file_map = {f.filename: f for f in files}
+        image_counter = [1] # Using list for mutable counter in recursion/loops
         
-        # Process all cells in the nested structure
-        image_counter = 1
+        # Process top-level cells
+        await process_cells(report.cells, uploaded_file_map, image_files, image_map, image_counter)
+
+        # Process sections/subsections
         for section in report.sections:
             for subsection in section.subsections:
-                for cell in subsection.cells:
-                    if cell.type == "image" and cell.mode != "placeholder":
-                        target_filename = cell.original_filename or cell.content
-                        if target_filename in uploaded_file_map:
-                            file_obj = uploaded_file_map[target_filename]
-                            ext = target_filename.split('.')[-1] if '.' in target_filename else 'png'
-                            clean_name = f"img_{image_counter:03d}.{ext}"
-                            
-                            await file_obj.seek(0)
-                            content = await file_obj.read()
-                            image_files[clean_name] = content
-                            image_map[target_filename] = clean_name
-                            image_counter += 1
+                await process_cells(subsection.cells, uploaded_file_map, image_files, image_map, image_counter)
         
         # Build LaTeX Body
         latex_body_parts = []
@@ -150,19 +131,20 @@ async def generate_zip(
         if len(report.sections) > 5:
             latex_body_parts.append("\\tableofcontents\n\\newpage\n\n")
 
+        for cell in report.cells:
+            latex_body_parts.append(render_cell(cell, image_map))
+
         for section in report.sections:
             latex_body_parts.append(f"\\section{{{escape_latex(section.title)}}}\n")
-            
             for subsection in section.subsections:
                 latex_body_parts.append(f"\\subsection{{{escape_latex(subsection.title)}}}\n")
-                
                 for cell in subsection.cells:
                     latex_body_parts.append(render_cell(cell, image_map))
         
         latex_body = "".join(latex_body_parts)
         
-        # Fill template
-        full_latex = LATEX_TEMPLATE % {
+        # Fill document structure
+        full_latex = BASE_DOCUMENT % {
             "title": report.title,
             "author": report.author,
             "content": latex_body
@@ -182,7 +164,7 @@ async def generate_zip(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid JSON format in report_json")
     except Exception as e:
-        print(f"ERROR: {e}") # Print error to server logs
+        print(f"ERROR: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

@@ -12,7 +12,12 @@ def test_generate_zip():
     print("Starting verification test...")
     
     # Create a dummy image
-    dummy_image_content = b"fake_image_bytes"
+    from PIL import Image
+    import io
+    img = Image.new('RGB', (10, 10), color = 'blue')
+    img_byte_arr = io.BytesIO()
+    img.save(img_byte_arr, format='PNG')
+    dummy_image_content = img_byte_arr.getvalue()
     files = [
         ('files', ('test_image.png', dummy_image_content, 'image/png'))
     ]
@@ -45,7 +50,8 @@ def test_generate_zip():
                 "mode": "placeholder",
                 "caption": "Draw here"
             }
-        ]
+        ],
+        "sections": []
     }
     
     response = client.post(

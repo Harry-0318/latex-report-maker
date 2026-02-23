@@ -12,7 +12,6 @@ Lab Report Builder is a browser-based tool that allows users to:
 
 - Create structured lab reports with sections and subsections
 - Add text, code blocks, and images to each subsection
-- Load pre-built templates using a 6-character code
 - Autosave progress locally
 - Generate a downloadable ZIP containing LaTeX source and images
 
@@ -29,11 +28,11 @@ Writing LaTeX manually is time-consuming. This tool abstracts the complexity whi
 ### Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│    Frontend     │────▶│    Backend      │────▶│ Storage Service │
-│   (React/Vite)  │     │ (Python/FastAPI)│     │   (External)    │
-│     Vercel      │     │     Render      │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+┌─────────────────┐     ┌─────────────────┐
+│    Frontend     │────▶│    Backend      │
+│   (React/Vite)  │     │ (Python/FastAPI)│
+│     Vercel      │     │     Render      │
+└─────────────────┘     └─────────────────┘
         │                       │
         │                       ▼
         │               ┌─────────────────┐
@@ -65,7 +64,6 @@ Writing LaTeX manually is time-consuming. This tool abstracts the complexity whi
 
 | Feature | Description |
 |---------|-------------|
-| **Template System** | Load read-only templates via 6-character codes |
 | **Autosave** | Automatic localStorage save with 1-second debounce |
 | **ZIP Generation** | Download `.tex` file + images in organized ZIP |
 | **Mobile-First UI** | Responsive design for all devices |
@@ -83,9 +81,7 @@ report-maker/
 │   ├── .env                 # Environment variables (not committed)
 │   ├── latex/
 │   │   ├── cell_renderer.py # Converts cells to LaTeX strings
-│   │   └── template.py      # LaTeX document template
-│   ├── services/
-│   │   └── templateStorage.py # External storage service client
+│   │   └── base_document.py # LaTeX document skeleton
 │   └── zip_utils/
 │       └── zip_builder.py   # Creates ZIP with .tex and images
 │
@@ -110,8 +106,7 @@ report-maker/
 |--------|----------------|
 | `main.py` | API endpoints, request handling, CORS |
 | `latex/cell_renderer.py` | Convert editor cells to LaTeX markup |
-| `latex/template.py` | Full LaTeX document template with packages |
-| `services/templateStorage.py` | Fetch templates from external storage |
+| `latex/base_document.py` | Full LaTeX document skeleton with packages |
 | `zip_utils/zip_builder.py` | Package LaTeX + images into ZIP |
 | `utils/storage.js` | Serialize/deserialize state to localStorage |
 
@@ -137,9 +132,6 @@ source env/bin/activate  # On Windows: env\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Create .env file
-echo "STORAGE_TOKEN=your-storage-token-here" > .env
 
 # Run server
 uvicorn main:app --reload --port 8000
@@ -169,12 +161,6 @@ npm run dev
 ---
 
 ## 5. Environment Variables
-
-### Backend (`backend/.env`)
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `STORAGE_TOKEN` | **Yes** | Authentication token for external storage service |
 
 ### Frontend (`frontend/.env`)
 
@@ -209,80 +195,11 @@ npm run dev
 2. Set root directory to `backend`
 3. Set build command: `pip install -r requirements.txt`
 4. Set start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-5. Set environment variable:
-   ```
-   STORAGE_TOKEN=your-production-token
-   ```
-6. Deploy
-
-### Domain Configuration
-
-```
-reports.projectalpha.in          → Vercel (frontend)
-backend.reports.projectalpha.in  → Render (backend)
-```
+5. Deploy
 
 ---
 
-## 7. Template System
-
-### Overview
-
-Templates are pre-built report structures stored in an external storage service. Users load templates using a **6-character alphanumeric code**.
-
-### How It Works
-
-1. User clicks "Use Template" button
-2. Enters 6-character template code
-3. Frontend calls `GET /get-template/{code}`
-4. Backend fetches all templates from storage service
-5. Finds matching template by code
-6. Returns template structure (sections, subsections, cells)
-7. Frontend replaces editor state with template
-8. Autosave triggers immediately
-
-### Template Structure
-
-```json
-{
-  "code": "ABC123",
-  "name": "Physics Lab Template",
-  "structure": [
-    {
-      "id": "sec1",
-      "title": "Introduction",
-      "subsections": [
-        {
-          "id": "sub1",
-          "title": "Objective",
-          "cells": [
-            { "id": "c1", "type": "text", "content": "" }
-          ]
-        }
-      ]
-    }
-  ]
-}
-```
-
-### Key Points
-
-- Templates are **read-only** in storage
-- Users can **freely edit** after loading
-- Images can be added after template load
-- Templates contain only `text` and `code` cells (no images)
-
-### Storage Service Details
-
-| Property | Value |
-|----------|-------|
-| Base URL | `https://storage.projectalpha.in` |
-| Endpoint | `/tools/tool_report_templates` |
-| Auth Header | `token: {STORAGE_TOKEN}` |
-
----
-
-## 8. Autosave System
+## 7. Autosave System
 
 ### Behavior
 
@@ -309,29 +226,16 @@ Templates are pre-built report structures stored in an external storage service.
 - Restored to File objects on page load
 - Large images may hit localStorage quota (~5MB limit)
 
-### Template Load Behavior
-
-When a template is loaded:
-1. Current state is overwritten
-2. Immediate autosave triggers with new content
-3. No race condition with stale state
-
-### Recovery
-
-On page load, if autosave data exists:
-- State is automatically restored
-- User continues where they left off
-
 ---
 
-## 9. LaTeX & ZIP Generation
+## 8. LaTeX & ZIP Generation
 
 ### LaTeX Generation Flow
 
 1. Frontend sends report JSON + image files to `/generate-zip`
 2. Backend iterates sections → subsections → cells
 3. Each cell is converted to LaTeX via `cell_renderer.py`
-4. Full document assembled using template from `template.py`
+4. Full document assembled using base document from `base_document.py`
 5. ZIP created with `zip_builder.py`
 
 ### Cell Types
@@ -351,126 +255,6 @@ Report_Name_Report.zip
 └── images/
     ├── img_001.png
     └── img_002.jpg
-```
-
-### LaTeX Packages Included
-
-- `graphicx` — Image support
-- `listings` — Code blocks
-- `geometry` — Page margins
-- `parskip` — Paragraph spacing
-- `float` — Figure positioning
-- `hyperref` — Clickable links
-
----
-
-## 10. Troubleshooting
-
-### Backend Won't Start
-
-```bash
-# Check Python version
-python3 --version  # Must be 3.9+
-
-# Reinstall dependencies
-pip install -r requirements.txt --force-reinstall
-```
-
-### CORS Errors
-
-Backend is configured for `allow_origins=["*"]`. If issues persist:
-- Verify `VITE_BACKEND_URL` matches actual backend URL
-- Check browser console for exact error
-
-### Templates Not Loading
-
-1. Verify `STORAGE_TOKEN` is set in backend `.env`
-2. Check backend logs for storage service errors
-3. Ensure template code is exactly 6 characters
-
-### ZIP Generation Fails
-
-- Check backend logs: `print(f"ERROR: {e}")`
-- Verify all image files are properly attached
-- Ensure report has at least one section
-
-### localStorage Quota Exceeded
-
-- Clear browser storage: `localStorage.clear()`
-- Reduce number/size of images
-- Warning appears in console when quota is exceeded
-
-### Storage Service Unavailable
-
-If external storage is down:
-- Template loading returns "Invalid template code"
-- Backend logs show HTTP error status
-- All other functionality remains unaffected
-
----
-
-## 11. Future Improvements
-
-- [ ] User authentication system
-- [ ] Cloud-based autosave (cross-device sync)
-- [ ] Template management UI for admins
-- [ ] Real-time collaboration
-- [ ] PDF preview before download
-- [ ] Custom LaTeX template selection
-
----
-
-## API Reference
-
-### `POST /generate-zip`
-
-Generate LaTeX ZIP from report data.
-
-**Request**: `multipart/form-data`
-- `report_json`: JSON string of report structure
-- `files`: Image files (optional)
-
-**Response**: ZIP file download
-
-### `GET /get-template/{code}`
-
-Fetch template by 6-character code.
-
-**Response**:
-```json
-{
-  "success": true,
-  "name": "Template Name",
-  "structure": [...]
-}
-```
-
-**Error Response**:
-```json
-{
-  "success": false,
-  "error": "Invalid template code"
-}
-```
-
-### `GET /admin/templates`
-
-**Admin only** — List all available template codes and names.
-
-**Response**:
-```json
-[
-  { "code": "ABC123", "name": "Physics Lab Template" },
-  { "code": "XYZ789", "name": "Chemistry Report" }
-]
-```
-
-**Error Response**:
-```json
-{
-  "success": false,
-  "error": "storage_unreachable"
-}
 ```
 
 ---

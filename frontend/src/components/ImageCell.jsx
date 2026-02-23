@@ -1,29 +1,43 @@
 import React, { useState, useEffect } from 'react';
+import PhoneUploadModal from './PhoneUploadModal';
+
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export default function ImageCell({ cell, updateCell }) {
     const [preview, setPreview] = useState(null);
+    const [showPhoneModal, setShowPhoneModal] = useState(false);
+    console.log(BACKEND_URL);
 
     useEffect(() => {
-        // Determine initial preview based on cell state or file
+        // Determine initial preview based on cell state, file, or asset_url
         if (cell.file_obj) {
             const objectUrl = URL.createObjectURL(cell.file_obj);
             setPreview(objectUrl);
             return () => URL.revokeObjectURL(objectUrl);
+        } else if (cell.asset_url) {
+            setPreview(`${BACKEND_URL}${cell.asset_url}`);
         } else if (cell.mode === 'placeholder') {
             setPreview(null);
+        } else {
+            setPreview(null);
         }
-    }, [cell.file_obj, cell.mode]);
+    }, [cell.file_obj, cell.asset_url, cell.mode]);
 
     const handleModeChange = (mode) => {
-        // Clear file if moving to placeholder, or switching modes effectively resets "current" file logic
-        updateCell(cell.id, { mode, file_obj: null, content: "" });
+        // Clear file/asset if moving to placeholder
+        updateCell(cell.id, { mode, file_obj: null, asset_id: null, asset_url: null, content: "" });
     };
 
     const handleFileChange = (e) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            // Update cell with file object. We use 'content' to store the filename for reference
-            updateCell(cell.id, { file_obj: file, content: file.name });
+            // Update cell with file object. Clear asset fields if any.
+            updateCell(cell.id, {
+                file_obj: file,
+                content: file.name,
+                asset_id: null,
+                asset_url: null
+            });
         }
     };
 
@@ -60,6 +74,13 @@ export default function ImageCell({ cell, updateCell }) {
                     />
                     Placeholder
                 </label>
+                <button
+                    className="btn-phone-upload"
+                    onClick={() => setShowPhoneModal(true)}
+                    style={{ marginLeft: '10px', fontSize: '12px' }}
+                >
+                    📱 From Phone
+                </button>
             </div>
 
             <div className="image-input-area">
@@ -88,7 +109,23 @@ export default function ImageCell({ cell, updateCell }) {
                     </div>
                 ) : (
                     preview ? (
-                        <img src={preview} alt="Preview" className="image-preview" />
+                        <div style={{ position: 'relative' }}>
+                            <img src={preview} alt="Preview" className="image-preview" />
+                            {cell.asset_id && (
+                                <span style={{
+                                    position: 'absolute',
+                                    top: '5px',
+                                    right: '5px',
+                                    backgroundColor: 'rgba(0,123,255,0.8)',
+                                    color: 'white',
+                                    fontSize: '10px',
+                                    padding: '2px 5px',
+                                    borderRadius: '4px'
+                                }}>
+                                    Cloud
+                                </span>
+                            )}
+                        </div>
                     ) : (
                         <div className="text-sm text-gray-500 italic p-2 border border-dashed text-center">
                             No image selected
@@ -103,6 +140,13 @@ export default function ImageCell({ cell, updateCell }) {
                 value={cell.caption || ""}
                 onChange={(e) => updateCell(cell.id, { caption: e.target.value })}
             />
+
+            {showPhoneModal && (
+                <PhoneUploadModal
+                    targetCellId={cell.id}
+                    onClose={() => setShowPhoneModal(false)}
+                />
+            )}
         </div>
     );
 }
